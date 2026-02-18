@@ -1,0 +1,4 @@
+../Core/Src/button_driver.c:14:6:is_pressed	1
+../Core/Src/button_driver.c:18:6:is_long_press	3
+../Core/Src/button_driver.c:22:6:is_long_unpress	3
+../Core/Src/button_driver.c:26:5:update_button_state	5

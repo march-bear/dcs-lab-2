@@ -25,9 +25,13 @@
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
 
-#include "mybuf.h"
+#include "morse_buf.h"
+#include "led.h"
+#include "timing.h"
+#include "button_driver.h"
 #include "uart_buf.h"
 #include "morse.h"
+#include "uart_driver.h"
 
 /* USER CODE END Includes */
 
@@ -39,9 +43,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define DEBOUNCE_DELAY 50 // ms
-#define LONG_PRESS_DELAY 200 // ms
-#define SHOW_SAVED_DELAY 900 // ms
+#define DURATION_TIMER 0
+#define LETTER_PAUSE_TIMER 1
 
 /* USER CODE END PD */
 
@@ -53,12 +56,6 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-GPIO_PinState button_state = GPIO_PIN_SET;
-GPIO_PinState last_reading = GPIO_PIN_SET;
-GPIO_PinState led_state = GPIO_PIN_RESET;
-
-uint32_t last_deb_time = 0;
-uint32_t last_move_time = 0;
 
 /* USER CODE END PV */
 
@@ -70,103 +67,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-void light_up(led_color led) {
-	switch (led) {
-	case RED:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
-		break;
-	case ORANGE:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-		break;
-	case GREEN:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
-		break;
-	}
-}
-
-void light_down(led_color led) {
-	switch (led) {
-	case RED:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
-		break;
-	case ORANGE:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-		break;
-	case GREEN:
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
-		break;
-	}
-}
-
-bool is_pressed() {
-	return !button_state;
-}
-
-bool is_long_press() {
-	return is_pressed() && HAL_GetTick() - last_move_time > LONG_PRESS_DELAY;
-}
-
-int is_changed(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin) {
-	GPIO_PinState reading = HAL_GPIO_ReadPin(GPIOx, GPIO_Pin);
-
-	if (reading != last_reading) {
-		last_deb_time = HAL_GetTick();
-		last_reading = reading;
-	}
-
-	if ((HAL_GetTick() - last_deb_time) > DEBOUNCE_DELAY) {
-		if (reading != button_state) {
-			button_state = reading;
-			last_move_time = HAL_GetTick();
-
-			if (is_pressed()) {
-				return 1;
-			} else {
-				return -1;
-			}
-		}
-	}
-
-	return 0;
-}
-
-bool uart6_transmit_ongoing;
-bool uart6_receive_finished;
-uint8_t uart6_buf;
-
-//HAL_StatusTypeDef uart6_transmit_it(uint8_t *buf, int len) {
-//	while (uart6_transmit_ongoing);
-//
-//	uart6_transmit_ongoing = 1;
-//	return HAL_UART_Transmit_IT(&huart6, buf, len);
-//}
-
-HAL_StatusTypeDef uart6_start_receive_char_it() {
-	uart6_receive_finished = 0;
-	return HAL_UART_Receive_IT(&huart6, &uart6_buf, 1);
-}
-
-bool uart6_try_push_received_char(uart_buf* buffer) {
-	if (uart6_receive_finished) {
-		uart_buf_push(buffer, (char) uart6_buf);
-		return true;
-	}
-
-	return false;
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	if (huart->Instance == USART6) {
-		uart6_receive_finished = 1;
-	}
-}
-
-//void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-//	if (huart->Instance == USART6) {
-//		uart6_transmit_ongoing = 0;
-//	}
-//}
 
 /* USER CODE END 0 */
 
@@ -207,110 +107,96 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  my_buf buf = (my_buf) {};
-  my_buf_init(&buf);
+  uart_buf buffer_rx;
+  uart_buf buffer_tx;
+  morse_buf button_buf;
 
-//  bool is_showing_buf = false;
-//  bool was_long_press = false;
-//  bool is_printing = false;
-//
-//  uint32_t duration_start_time = 0;
-//
-//  morse sym;
-
-  uart_buf buffer;
-
-  uart6_start_receive_char_it();
-  char c;
   bool is_showing = false;
   bool is_printing = false;
-
-  uint32_t duration_start_time;
-  uint32_t letter_pause_start_time = HAL_GetTick();;
-  morse sym;
-  int i = 0;
-
-  uart_buf_reset(&buffer);
   bool was_long_press = false;
+
+  char received_char;
+  morse curr_morse_sym;
+  int curr_morse_sym_i;
+
+  uart_buf_reset(&buffer_rx);
+  uart_buf_reset(&buffer_tx);
+  morse_buf_reset(&button_buf);
+
+  timer_reset(DURATION_TIMER);
+  timer_reset(LETTER_PAUSE_TIMER);
+
+  uart6_start_receive_char_it();
 
   while (1)
   {
-	  if (uart6_try_push_received_char(&buffer)) {
-		  uart6_start_receive_char_it();
+	  receive_char_into_buffer(&buffer_rx);
+	  transmit_char_from_buffer(&buffer_tx);
+
+	  if (!is_showing && uart_buf_pop(&buffer_rx, &received_char)) {
+		  if (received_char == '+') {
+			  uart6_switch_interrupt_mode();
+		  } else {
+			  timer_reset(DURATION_TIMER);
+			  is_showing = true;
+		  }
 	  }
 
-	  if (!is_showing && uart_buf_pop(&buffer, &c)) {
-		  duration_start_time = HAL_GetTick();
-		  is_showing = true;
-	  }
-
-	  if (is_showing && HAL_GetTick() - letter_pause_start_time > LETTER_PAUSE_DURATION) {
-		  if (!is_printing && HAL_GetTick() - duration_start_time > PAUSE_DURATION) {
-				  if (!morse_get_sym(c, i++, &sym)) {
-					  i = 0;
+	  if (is_showing && is_timer_expired(LETTER_PAUSE_TIMER, LETTER_PAUSE_DURATION)) {
+		  if (!is_printing && is_timer_expired(DURATION_TIMER, PAUSE_DURATION)) {
+				  if (!morse_get_sym(received_char, curr_morse_sym_i++, &curr_morse_sym)) {
+					  curr_morse_sym_i = 0;
 					  is_showing = false;
 				  } else {
 					  is_printing = true;
 					  light_up(GREEN);
-					  duration_start_time = HAL_GetTick();
+					  timer_reset(DURATION_TIMER);
 				  }
 		  } else if (
-				(sym == MORSE_DASH && HAL_GetTick() - duration_start_time > DASH_DURATION)
-				|| (sym == MORSE_DOT && HAL_GetTick() - duration_start_time > DOT_DURATION)
+				(is_printing && curr_morse_sym == MORSE_DASH && is_timer_expired(DURATION_TIMER, DASH_DURATION))
+				|| (is_printing && curr_morse_sym == MORSE_DOT && is_timer_expired(DURATION_TIMER, DOT_DURATION))
 			  ) {
 				  light_down(GREEN);
 				  is_printing = false;
-				  duration_start_time = HAL_GetTick();
-				  if (!morse_get_sym(c, i, &sym)) {
-					  i = 0;
+				  timer_reset(DURATION_TIMER);
+				  if (!morse_get_sym(received_char, curr_morse_sym_i, &curr_morse_sym)) {
+					  curr_morse_sym_i = 0;
 					  is_showing = false;
-					  letter_pause_start_time = HAL_GetTick();
+					  timer_reset(LETTER_PAUSE_TIMER);
 				  }
 		  }
 	  }
 
-	  if (!is_showing) {
-	  		  if (is_long_press()) {
-	  			  was_long_press = true;
-	  		  }
+	  if (is_long_press()) {
+		  was_long_press = true;
+	  }
 
-	  		  switch (is_changed(GPIOC, GPIO_PIN_15)) {
-	  		  	  case 1:
-	  		  		  break;
-	  		  	  case -1:
-	  		  		  if (was_long_press) {
-	  		  			  light_up(RED);
-	  					  HAL_Delay(5);
-	  					  light_down(RED);
-	  		  			  my_buf_write(&buf, MORSE_DASH);
-	  		  			  was_long_press = false;
-	  		  		  } else {
-	  		  			  light_up(ORANGE);
-	  		  			  HAL_Delay(5);
-	  		  			  light_down(ORANGE);
-	  		  			  my_buf_write(&buf, MORSE_DOT);
-	  		  		  }
-	  		  		  break;
-	  		  	  default:
-	  		  		  break;
-	  		  }
+	  switch (update_button_state()) {
+		  case 1:
+			  break;
+		  case -1:
+			  if (was_long_press) {
+				  light_blink(RED);
+				  morse_buf_write(&button_buf, MORSE_DASH);
+				  was_long_press = false;
+			  } else {
+				  light_blink(ORANGE);
+				  morse_buf_write(&button_buf, MORSE_DOT);
+			  }
+			  break;
+		  default:
+			  break;
+	  }
 
-	  		  if (
-	  				  (!my_buf_empty(&buf) && HAL_GetTick() - last_move_time > SHOW_SAVED_DELAY && !is_pressed())
-	  				  || my_buf_full(&buf)
-	  		  ) {
-	  			  char ch = decode_char(&buf);
-	  			  my_buf_reset(&buf);
-	  			  if (ch != '\0') {
-	  				HAL_StatusTypeDef ok = HAL_UART_Transmit(&huart6, (uint8_t *) &ch, 1, 100);
-	  				if (ok == HAL_OK) {
-	  					light_up(RED);
-					  HAL_Delay(500);
-					  light_down(RED);
-	  				}
-	  			  }
-	  		  }
-	  	  }
+	  if (
+			  (!morse_buf_empty(&button_buf) && is_long_unpress()) || morse_buf_full(&button_buf)
+	  ) {
+		  char ch = decode_char(&button_buf);
+		  morse_buf_reset(&button_buf);
+		  if (ch != '\0') {
+			  uart_buf_push(&buffer_tx, ch);
+		  }
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

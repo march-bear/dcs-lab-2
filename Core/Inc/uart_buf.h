@@ -16,4 +16,3 @@ void uart_buf_init(uart_buf* buf);
 void uart_buf_push(uart_buf* buf, char data);
 bool uart_buf_pop(uart_buf* buf, char* data);
 void uart_buf_reset(uart_buf* buf);
-bool invalid(uart_buf* buf);

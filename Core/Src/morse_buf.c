@@ -1,12 +1,7 @@
-#include "mybuf.h"
+#include "morse_buf.h"
 
-void my_buf_init(my_buf* buf) {
-    buf->write_idx = 0;
-    buf->read_idx = 0;
-}
-
-bool my_buf_write(my_buf* buf, morse data) {
-    if (buf->write_idx == MY_BUFFER_SIZE) {
+bool morse_buf_write(morse_buf* buf, morse data) {
+    if (buf->write_idx == MORSE_BUFFER_SIZE) {
     	return false;
     }
 
@@ -16,7 +11,7 @@ bool my_buf_write(my_buf* buf, morse data) {
     return true;
 }
 
-bool my_buf_next(my_buf* buf, morse* data) {
+bool morse_buf_next(morse_buf* buf, morse* data) {
     if (buf->read_idx == buf->write_idx) {
     	return false;
     }
@@ -27,7 +22,7 @@ bool my_buf_next(my_buf* buf, morse* data) {
     return true;
 }
 
-bool my_buf_curr(my_buf* buf, morse* data) {
+bool morse_buf_curr(morse_buf* buf, morse* data) {
     if (buf->read_idx == buf->write_idx) {
     	return false;
     }
@@ -37,25 +32,25 @@ bool my_buf_curr(my_buf* buf, morse* data) {
     return true;
 }
 
-void my_buf_reset(my_buf* buf) {
+void morse_buf_reset(morse_buf* buf) {
 	buf->write_idx = 0;
 	buf->read_idx = 0;
 }
 
-bool my_buf_empty(my_buf* buf) {
+bool morse_buf_empty(morse_buf* buf) {
 	return buf->write_idx == 0;
 }
 
-bool my_buf_full(my_buf* buf) {
-	return buf->write_idx == MY_BUFFER_SIZE;
-}
-
-int my_buf_len(my_buf* buf) {
+int morse_buf_len(morse_buf* buf) {
 	return buf->write_idx - buf->read_idx;
 }
 
-bool my_buf_is_eq(my_buf* buf, const morse* other, uint8_t len) {
-	if (my_buf_len(buf) == len) {
+bool morse_buf_full(morse_buf* buf) {
+	return buf->write_idx == MORSE_BUFFER_SIZE;
+}
+
+bool morse_buf_is_eq(morse_buf* buf, const morse* other, uint8_t len) {
+	if (morse_buf_len(buf) == len) {
 		for (int j = 0; j < len; ++j) {
 			if (other[j] != buf->buffer[j]) {
 				return false;
@@ -68,12 +63,13 @@ bool my_buf_is_eq(my_buf* buf, const morse* other, uint8_t len) {
 	return false;
 }
 
-char decode_char(my_buf * buf) {
+char decode_char(morse_buf * buf) {
 	for (int i = 0; i < morse_alphabet_len; ++i) {
-		if (my_buf_is_eq(buf, morse_alphabet[i].code, morse_alphabet[i].length)) {
+		if (morse_buf_is_eq(buf, morse_alphabet[i].code, morse_alphabet[i].length)) {
 			return morse_alphabet[i].letter;
 		}
 	}
 
 	return '\0';
 }
+

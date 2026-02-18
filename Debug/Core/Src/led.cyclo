@@ -1,0 +1,3 @@
+../Core/Src/led.c:4:6:light_up	5
+../Core/Src/led.c:18:6:light_down	5
+../Core/Src/led.c:32:6:light_blink	1

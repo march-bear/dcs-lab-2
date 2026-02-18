@@ -1,0 +1,9 @@
+../Core/Src/morse_buf.c:3:6:morse_buf_write	2
+../Core/Src/morse_buf.c:14:6:morse_buf_next	2
+../Core/Src/morse_buf.c:25:6:morse_buf_curr	2
+../Core/Src/morse_buf.c:35:6:morse_buf_reset	1
+../Core/Src/morse_buf.c:40:6:morse_buf_empty	1
+../Core/Src/morse_buf.c:44:5:morse_buf_len	1
+../Core/Src/morse_buf.c:48:6:morse_buf_full	1
+../Core/Src/morse_buf.c:52:6:morse_buf_is_eq	4
+../Core/Src/morse_buf.c:66:6:decode_char	3

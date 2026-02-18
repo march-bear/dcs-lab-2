@@ -1,0 +1,2 @@
+../Core/Src/timing.c:6:6:timer_reset	16	static
+../Core/Src/timing.c:12:6:is_timer_expired	16	static

@@ -12,7 +12,7 @@ typedef struct {
     uint16_t size;
 } uart_buf;
 
-void uart_buf_init(uart_buf* buf);
 void uart_buf_push(uart_buf* buf, char data);
 bool uart_buf_pop(uart_buf* buf, char* data);
 void uart_buf_reset(uart_buf* buf);
+bool uart_buf_empty(uart_buf* buf);

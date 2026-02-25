@@ -44,6 +44,10 @@ bool uart_buf_pop(uart_buf* buf, char* data) {
 	return true;
 }
 
+bool uart_buf_empty(uart_buf* buf) {
+	return buf->size == 0;
+}
+
 void uart_buf_reset(uart_buf* buf) {
 	buf->write_idx = 0;
 	buf->read_idx = 0;

@@ -107,8 +107,6 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  uart_buf buffer_rx;
-  uart_buf buffer_tx;
   morse_buf button_buf;
 
   bool is_showing = false;
@@ -117,7 +115,7 @@ int main(void)
 
   char received_char;
   morse curr_morse_sym;
-  int curr_morse_sym_i;
+  int curr_morse_sym_i = 0;
 
   uart_buf_reset(&buffer_rx);
   uart_buf_reset(&buffer_tx);
@@ -126,32 +124,30 @@ int main(void)
   timer_reset(DURATION_TIMER);
   timer_reset(LETTER_PAUSE_TIMER);
 
-  uart6_start_receive_char_it();
-
   while (1)
   {
-	  receive_char_into_buffer(&buffer_rx);
-	  transmit_char_from_buffer(&buffer_tx);
+	  receive_char_into_buffer();
+	  transmit_char_from_buffer();
 
 	  if (!is_showing && uart_buf_pop(&buffer_rx, &received_char)) {
 		  if (received_char == '+') {
 			  uart6_switch_interrupt_mode();
 		  } else {
-			  timer_reset(DURATION_TIMER);
-			  is_showing = true;
+			  if (morse_get_sym(received_char, 0, &curr_morse_sym)) {
+				  timer_reset(DURATION_TIMER);
+				  is_showing = true;
+			  }
 		  }
 	  }
 
+	  start_receive_char();
+
 	  if (is_showing && is_timer_expired(LETTER_PAUSE_TIMER, LETTER_PAUSE_DURATION)) {
 		  if (!is_printing && is_timer_expired(DURATION_TIMER, PAUSE_DURATION)) {
-				  if (!morse_get_sym(received_char, curr_morse_sym_i++, &curr_morse_sym)) {
-					  curr_morse_sym_i = 0;
-					  is_showing = false;
-				  } else {
-					  is_printing = true;
-					  light_up(GREEN);
-					  timer_reset(DURATION_TIMER);
-				  }
+			  curr_morse_sym_i++;
+			  is_printing = true;
+			  light_up(GREEN);
+			  timer_reset(DURATION_TIMER);
 		  } else if (
 				(is_printing && curr_morse_sym == MORSE_DASH && is_timer_expired(DURATION_TIMER, DASH_DURATION))
 				|| (is_printing && curr_morse_sym == MORSE_DOT && is_timer_expired(DURATION_TIMER, DOT_DURATION))
